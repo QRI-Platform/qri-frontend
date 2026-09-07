@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Mail, User } from "lucide-react";
 import { AuthShell } from "@/components/auth/auth-shell";
-import { GoogleButton } from "@/components/auth/google-button";
 import { PasswordInput } from "@/components/auth/password-input";
 import { apiFetch } from "@/lib/api";
 import { saveToken } from "@/lib/auth-client";
@@ -64,14 +63,6 @@ export default function SignupPage() {
         </>
       }
     >
-      <GoogleButton label="Sign up with Google" />
-
-      <div className="my-5 flex items-center gap-3">
-        <div className="h-px flex-1 bg-border" />
-        <span className="text-xs text-muted-foreground">or</span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="relative">
           <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
