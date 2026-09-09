@@ -37,7 +37,7 @@ export function ValueProps() {
               href="/signup"
               className="inline-flex items-center justify-center rounded-xl bg-white px-6 py-3 font-semibold text-[var(--brand-navy)] shadow-lg transition hover:bg-white/90"
             >
-              Get started free
+              Get started for ₹9/month
             </a>
           </div>
         </div>

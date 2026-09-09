@@ -28,7 +28,7 @@ function toFrontendMessage(m: BackendMessage): Message {
       m.role === "ASSISTANT"
         ? m.source === "LIBRARY"
           ? "QRI library"
-          : "AI answer"
+          : "QRI AI response.."
         : undefined,
   };
 }
