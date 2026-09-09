@@ -11,14 +11,19 @@ export function Hero() {
 
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 md:grid-cols-2 md:py-24">
         <div className="max-w-xl">
-          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs font-semibold text-[var(--brand-teal)]">
-            {siteConfig.name} - {siteConfig.fullName}
+          {/**
+           * The price sits in the badge rather than the button. It's the
+           * first thing read, and keeps the button short enough not to
+           * wrap on a phone.
+           */}
+          <span className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-teal)]/30 bg-[var(--brand-teal)]/10 px-3 py-1 text-xs font-semibold text-[var(--brand-teal)]">
+            Early Bird Offer - just ₹9/month
           </span>
 
           <h1 className="mt-5 text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">
-            Har question ka{" "}
+            Har Question Ka{" "}
             <span className="bg-gradient-to-br from-[var(--brand-blue)] via-[var(--brand-navy)] to-[var(--brand-teal)] bg-clip-text text-transparent">
-              smart answer.
+              Smart Answer.
             </span>
           </h1>
 
@@ -31,7 +36,7 @@ export function Hero() {
               href="/signup"
               className="inline-flex items-center justify-center rounded-xl bg-[var(--brand-blue)] px-6 py-3 font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:opacity-90"
             >
-              Start learning free
+              Start for ₹9/month
             </a>
             <a
               href="#how-it-works"
@@ -42,7 +47,7 @@ export function Hero() {
           </div>
 
           <p className="mt-5 text-xs text-muted-foreground">
-            Free to start - Class 6-12 - NEET - IIT-JEE - NDA
+            150 questions a month - Class 6-12 - NEET - IIT-JEE - NDA
           </p>
         </div>
 

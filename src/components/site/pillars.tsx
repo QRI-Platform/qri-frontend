@@ -17,7 +17,7 @@ const PILLARS: Pillar[] = [
   {
     letter: "Q",
     en: "Quest",
-    hi: "Prashn",
+    hi: "Prashn/Jigyasa",
     icon: Search,
     tint: "blue",
     iconBg: "bg-gradient-to-br from-blue-500 to-blue-600",
