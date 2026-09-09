@@ -16,9 +16,9 @@ export function Hero() {
           </span>
 
           <h1 className="mt-5 text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">
-            Har question ka{" "}
+            Har Question Ka{" "}
             <span className="bg-gradient-to-br from-[var(--brand-blue)] via-[var(--brand-navy)] to-[var(--brand-teal)] bg-clip-text text-transparent">
-              smart answer.
+              Smart Answer.
             </span>
           </h1>
 
