@@ -49,6 +49,8 @@ export default function ChatPage() {
   const [previewKey, setPreviewKey] = useState(0);
     // The chat awaiting delete confirmation, if any.
   const [chatToDelete, setChatToDelete] = useState<ChatSession | null>(null);
+  const [chatToRename, setChatToRename] = useState<ChatSession | null>(null);
+  const [renameTitle, setRenameTitle] = useState("");
 
   useEffect(() => {
     if (!ready) return;
@@ -99,6 +101,32 @@ export default function ChatPage() {
 
     setChats((prev) => [result.data.chat, ...prev]);
     await selectChat(result.data.chat.id);
+  }
+
+  function requestRenameChat(id: string) {
+    const chat = chats.find((item) => item.id === id);
+    if (!chat) return;
+
+    setChatToRename(chat);
+    setRenameTitle(chat.title);
+  }
+
+  async function confirmRenameChat() {
+    const chat = chatToRename;
+    const title = renameTitle.trim();
+    if (!chat || !title || title === chat.title) {
+      setChatToRename(null);
+      return;
+    }
+
+    const result = await apiFetch<{ chat: ChatSession }>(`/api/chats/${chat.id}/title`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    });
+    if (!result.ok) return;
+
+    setChats((prev) => prev.map((item) => (item.id === chat.id ? result.data.chat : item)));
+    setChatToRename(null);
   }
 
      function requestDeleteChat(id: string) {
@@ -215,6 +243,7 @@ export default function ChatPage() {
           activeChatId={activeChatId}
           onSelectChat={selectChat}
           onNewChat={handleNewChat}
+          onRenameChat={requestRenameChat}
           onDeleteChat={requestDeleteChat}   
                />
 
@@ -231,6 +260,10 @@ export default function ChatPage() {
           messages={activeMessages}
           onMessagesAppended={handleMessagesAppended}
           onMessageUpdated={handleMessageUpdated}
+          onTitleUpdated={(title) => {
+            if (!activeChatId) return;
+            setChats((prev) => prev.map((chat) => (chat.id === activeChatId ? { ...chat, title } : chat)));
+          }}
         />
 
                 <AnimatePresence>
@@ -248,6 +281,49 @@ export default function ChatPage() {
         onConfirm={confirmDeleteChat}
         onCancel={() => setChatToDelete(null)}
       />
+
+      {chatToRename && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button
+            className="absolute inset-0 bg-black/50"
+            aria-label="Cancel rename"
+            onClick={() => setChatToRename(null)}
+          />
+          <form
+            className="relative w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-xl"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void confirmRenameChat();
+            }}
+          >
+            <h2 className="text-sm font-bold">Rename chat</h2>
+            <input
+              autoFocus
+              value={renameTitle}
+              maxLength={80}
+              onChange={(event) => setRenameTitle(event.target.value)}
+              className="mt-4 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              aria-label="Chat title"
+            />
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setChatToRename(null)}
+                className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold transition hover:bg-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!renameTitle.trim()}
+                className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Rename
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

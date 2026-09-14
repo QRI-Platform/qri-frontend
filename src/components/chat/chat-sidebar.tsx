@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, MessageSquare, PanelLeftClose, Trash2 } from "lucide-react";
+import { Plus, MessageSquare, PanelLeftClose, Trash2, MoreVertical, Pencil } from "lucide-react";
 
 export interface ChatSession {
   id: string;
@@ -17,6 +18,7 @@ interface ChatSidebarProps {
   activeChatId: string | null;
   onSelectChat: (id: string) => void;
   onNewChat: () => void;
+  onRenameChat: (id: string) => void;
   onDeleteChat: (id: string) => void;
 }
 
@@ -29,8 +31,11 @@ export function ChatSidebar({
   activeChatId,
   onSelectChat,
   onNewChat,
+  onRenameChat,
   onDeleteChat,
 }: ChatSidebarProps) {
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
   return (
     <>
       {open && (
@@ -95,13 +100,40 @@ export function ChatSidebar({
                     <span className="flex-1 truncate">{chat.title}</span>
                   </button>
 
-                  <button
-                    onClick={() => onDeleteChat(chat.id)}
-                    aria-label={`Delete ${chat.title}`}
-                    className="shrink-0 rounded-md p-1.5 text-muted-foreground opacity-100 transition hover:bg-destructive/10 hover:text-destructive lg:opacity-0 lg:group-hover:opacity-100"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="relative shrink-0">
+                    <button
+                      onClick={() => setOpenMenuId((current) => (current === chat.id ? null : chat.id))}
+                      aria-label={`More options for ${chat.title}`}
+                      className="rounded-md p-1.5 text-muted-foreground opacity-100 transition hover:bg-secondary hover:text-foreground lg:opacity-0 lg:group-hover:opacity-100"
+                    >
+                      <MoreVertical className="h-3.5 w-3.5" />
+                    </button>
+
+                    {openMenuId === chat.id && (
+                      <div className="absolute right-0 top-8 z-20 w-32 rounded-lg border border-border bg-background p-1 shadow-lg">
+                        <button
+                          onClick={() => {
+                            setOpenMenuId(null);
+                            onRenameChat(chat.id);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-secondary"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          Rename
+                        </button>
+                        <button
+                          onClick={() => {
+                            setOpenMenuId(null);
+                            onDeleteChat(chat.id);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

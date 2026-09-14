@@ -49,6 +49,7 @@ interface ChatThreadProps {
   messages: Message[];
   onMessagesAppended: (newMessages: Message[]) => void;
   onMessageUpdated: (id: string, patch: Partial<Message>) => void;
+  onTitleUpdated: (title: string) => void;
 }
 
 function formatSize(bytes: number) {
@@ -69,6 +70,7 @@ export function ChatThread({
   messages,
   onMessagesAppended,
   onMessageUpdated,
+  onTitleUpdated,
 }: ChatThreadProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
@@ -230,6 +232,7 @@ export function ChatThread({
 
         if (event.type === "done") {
           setThinking(false);
+          if (event.title) onTitleUpdated(event.title);
           onMessageUpdated(tempId, {
             id: event.assistantMessageId ?? tempId,
             content: event.content ?? streamed,
