@@ -9,6 +9,15 @@ import { PasswordInput } from "@/components/auth/password-input";
 import { apiFetch } from "@/lib/api";
 import { saveToken } from "@/lib/auth-client";
 
+const CLASSES = [6, 7, 8, 9, 10, 11, 12] as const;
+
+const EXAM_TRACKS = [
+  { key: "NONE", label: "None" },
+  { key: "NEET", label: "NEET" },
+  { key: "IIT_JEE", label: "IIT-JEE" },
+  { key: "NDA", label: "NDA" },
+] as const;
+
 interface RegisterResponse {
   token: string;
   user: { id: string; name: string; email: string; role: string };
@@ -20,6 +29,8 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [grade, setGrade] = useState<number | null>(null);
+  const [examTrack, setExamTrack] = useState("NONE");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -31,12 +42,16 @@ export default function SignupPage() {
       setError("Passwords do not match.");
       return;
     }
+    if (grade === null) {
+      setError("Please choose your class.");
+      return;
+    }
 
     setLoading(true);
 
     const result = await apiFetch<RegisterResponse>("/api/auth/register", {
       method: "POST",
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, grade, examTrack }),
     });
 
     setLoading(false);
@@ -47,13 +62,18 @@ export default function SignupPage() {
     }
 
     saveToken(result.data.token);
-    router.push("/select-class");
+    /**
+     * Straight to the plan page. A new student has no subscription, so
+     * /chat would only bounce them here anyway - going directly avoids
+     * a visible flash of the wrong page.
+     */
+    router.push("/upgrade");
   }
 
   return (
     <AuthShell
       title="Create your account"
-      subtitle="Start learning for free"
+      subtitle="Tell us your class so answers match your level"
       footer={
         <>
           Already have an account?{" "}
@@ -109,6 +129,49 @@ export default function SignupPage() {
           minLength={8}
           placeholder="Confirm password"
         />
+
+        <div className="pt-1">
+          <p className="text-sm font-semibold">Your class</p>
+          <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-7">
+            {CLASSES.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setGrade(c)}
+                className={`flex h-11 items-center justify-center rounded-xl border text-base font-bold transition ${
+                  grade === c
+                    ? "border-[var(--brand-blue)] bg-[var(--brand-blue)]/10 text-[var(--brand-blue)]"
+                    : "border-border text-foreground hover:bg-secondary"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold">Preparing for an exam?</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {EXAM_TRACKS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setExamTrack(t.key)}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+                  examTrack === t.key
+                    ? "border-[var(--brand-teal)] bg-[var(--brand-teal)]/10 text-[var(--brand-teal)]"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            You can change these any time from your profile.
+          </p>
+        </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 

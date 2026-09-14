@@ -43,7 +43,7 @@ export default function LoginPage() {
     // The login response already includes the role, so this costs no
     // extra request. Admins land on the admin panel; students carry on
     // to class selection as before.
-    router.push(result.data.user.role === "ADMIN" ? "/admin" : "/select-class");
+    router.push(result.data.user.role === "ADMIN" ? "/admin" : "/chat");
   }
 
   return (
