@@ -23,7 +23,7 @@ export interface SelectedFile {
   type: "image" | "pdf" | "document";
   url?: string;
   sizeLabel: string;
-  status: "uploading" | "ready" | "failed";
+  status: "pending" | "uploading" | "ready" | "failed";
   error?: string;
 }
 
@@ -49,6 +49,8 @@ interface ChatThreadProps {
   messages: Message[];
   onMessagesAppended: (newMessages: Message[]) => void;
   onMessageUpdated: (id: string, patch: Partial<Message>) => void;
+  onTitleUpdated: (title: string) => void;
+  onUploadFiles: () => Promise<boolean>;
 }
 
 function formatSize(bytes: number) {
@@ -69,6 +71,8 @@ export function ChatThread({
   messages,
   onMessagesAppended,
   onMessageUpdated,
+  onTitleUpdated,
+  onUploadFiles,
 }: ChatThreadProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
@@ -85,7 +89,11 @@ export function ChatThread({
     async function handleSend() {
     const text = input.trim();
     if (!text || !chatId) return;
+
     if (isUploading) return;
+
+    const filesUploaded = await onUploadFiles();
+    if (!filesUploaded) return;
 
     setInput("");
     setSendError("");
@@ -230,6 +238,7 @@ export function ChatThread({
 
         if (event.type === "done") {
           setThinking(false);
+          if (event.title) onTitleUpdated(event.title);
           onMessageUpdated(tempId, {
             id: event.assistantMessageId ?? tempId,
             content: event.content ?? streamed,

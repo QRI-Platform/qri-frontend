@@ -140,6 +140,7 @@ export type StreamEvent =
       content?: string;
       ok?: boolean;
       assistantMessageId?: string;
+      title?: string;
     }
   | {
       type: "error";

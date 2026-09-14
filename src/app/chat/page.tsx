@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { AppHeader } from "@/components/app/app-header";
 import { ChatSidebar, type ChatSession } from "@/components/chat/chat-sidebar";
@@ -19,10 +19,22 @@ interface BackendMessage {
   source: "LIBRARY" | "AI" | null;
 }
 
+interface UploadedFileMessage {
+  id: string;
+  role: "SYSTEM";
+  content: string;
+  source: null;
+}
+
+interface UploadResponse {
+  files: { name: string; size: number }[];
+  messages: UploadedFileMessage[];
+}
+
 function toFrontendMessage(m: BackendMessage): Message {
   return {
     id: m.id,
-    role: m.role === "USER" ? "user" : "assistant",
+    role: m.role === "USER" ? "user" : m.role === "SYSTEM" ? "system" : "assistant",
     content: m.content,
     badge:
       m.role === "ASSISTANT"
@@ -49,6 +61,9 @@ export default function ChatPage() {
   const [previewKey, setPreviewKey] = useState(0);
     // The chat awaiting delete confirmation, if any.
   const [chatToDelete, setChatToDelete] = useState<ChatSession | null>(null);
+  const [chatToRename, setChatToRename] = useState<ChatSession | null>(null);
+  const [renameTitle, setRenameTitle] = useState("");
+  const pendingUploads = useRef(new Map<string, File>());
 
   useEffect(() => {
     if (!ready) return;
@@ -84,6 +99,7 @@ export default function ChatPage() {
   async function selectChat(id: string) {
     setActiveChatId(id);
     setAttachedFiles([]);
+    pendingUploads.current.clear();
     setPreviewFile(null);
     setSidebarOpen(false);
 
@@ -99,6 +115,32 @@ export default function ChatPage() {
 
     setChats((prev) => [result.data.chat, ...prev]);
     await selectChat(result.data.chat.id);
+  }
+
+  function requestRenameChat(id: string) {
+    const chat = chats.find((item) => item.id === id);
+    if (!chat) return;
+
+    setChatToRename(chat);
+    setRenameTitle(chat.title);
+  }
+
+  async function confirmRenameChat() {
+    const chat = chatToRename;
+    const title = renameTitle.trim();
+    if (!chat || !title || title === chat.title) {
+      setChatToRename(null);
+      return;
+    }
+
+    const result = await apiFetch<{ chat: ChatSession }>(`/api/chats/${chat.id}/title`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    });
+    if (!result.ok) return;
+
+    setChats((prev) => prev.map((item) => (item.id === chat.id ? result.data.chat : item)));
+    setChatToRename(null);
   }
 
      function requestDeleteChat(id: string) {
@@ -150,32 +192,51 @@ export default function ChatPage() {
   }
 
       async function handleFileSelected(file: SelectedFile, rawFile: File) {
-    setAttachedFiles((prev) => [...prev, file]);
+      setAttachedFiles((prev) => [...prev, { ...file, status: "pending" }]);
+      pendingUploads.current.set(file.id, rawFile);
     setPreviewFile(file);
     setPreviewKey((k) => k + 1);
+  }
 
-    if (!activeChatId) return;
+  async function uploadPendingFiles(): Promise<boolean> {
+    if (!activeChatId || pendingUploads.current.size === 0) return true;
 
-    // Shrink photos before sending - OCR cost scales with pixel count,
-    // and a full-resolution phone photo takes minutes on CPU.
-    const toUpload = await resizeImage(rawFile);
-
-    const form = new FormData();
-    form.append("files", toUpload, toUpload.name);
-
-    const result = await apiUpload(`/api/chats/${activeChatId}/upload`, form);
+    const pendingEntries = Array.from(pendingUploads.current.entries());
+    const pendingIds = new Set(pendingEntries.map(([fileId]) => fileId));
 
     setAttachedFiles((prev) =>
-      prev.map((f) =>
-        f.id === file.id
-          ? {
-              ...f,
-              status: result.ok ? "ready" : "failed",
-              error: result.ok ? undefined : result.error.message,
-            }
-          : f,
-      ),
+      prev.map((file) => (pendingIds.has(file.id) ? { ...file, status: "uploading" } : file)),
     );
+
+    try {
+      const resizedFiles = await Promise.all(
+        pendingEntries.map(([, rawFile]) => resizeImage(rawFile)),
+      );
+      const form = new FormData();
+      resizedFiles.forEach((file) => form.append("files", file, file.name));
+
+      const result = await apiUpload<UploadResponse>(`/api/chats/${activeChatId}/upload`, form);
+      if (!result.ok) {
+        setAttachedFiles((prev) =>
+          prev.map((file) =>
+            pendingIds.has(file.id) ? { ...file, status: "failed", error: result.error.message } : file,
+          ),
+        );
+        return false;
+      }
+
+      pendingUploads.current.clear();
+      setAttachedFiles((prev) => prev.filter((file) => !pendingIds.has(file.id)));
+      setPreviewFile(null);
+      handleMessagesAppended(result.data.messages.map(toFrontendMessage));
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not read these files";
+      setAttachedFiles((prev) =>
+        prev.map((file) => (pendingIds.has(file.id) ? { ...file, status: "failed", error: message } : file)),
+      );
+      return false;
+    }
   }
 
   function handleOpenPreview(file: SelectedFile) {
@@ -184,6 +245,7 @@ export default function ChatPage() {
   }
 
   function handleRemoveAttachment(file: SelectedFile) {
+    pendingUploads.current.delete(file.id);
     setAttachedFiles((prev) => prev.filter((f) => f.id !== file.id));
     setPreviewFile((current) => (current?.id === file.id ? null : current));
   }
@@ -215,6 +277,7 @@ export default function ChatPage() {
           activeChatId={activeChatId}
           onSelectChat={selectChat}
           onNewChat={handleNewChat}
+          onRenameChat={requestRenameChat}
           onDeleteChat={requestDeleteChat}   
                />
 
@@ -231,6 +294,11 @@ export default function ChatPage() {
           messages={activeMessages}
           onMessagesAppended={handleMessagesAppended}
           onMessageUpdated={handleMessageUpdated}
+          onTitleUpdated={(title) => {
+            if (!activeChatId) return;
+            setChats((prev) => prev.map((chat) => (chat.id === activeChatId ? { ...chat, title } : chat)));
+          }}
+          onUploadFiles={uploadPendingFiles}
         />
 
                 <AnimatePresence>
@@ -248,6 +316,49 @@ export default function ChatPage() {
         onConfirm={confirmDeleteChat}
         onCancel={() => setChatToDelete(null)}
       />
+
+      {chatToRename && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <button
+            className="absolute inset-0 bg-black/50"
+            aria-label="Cancel rename"
+            onClick={() => setChatToRename(null)}
+          />
+          <form
+            className="relative w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-xl"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void confirmRenameChat();
+            }}
+          >
+            <h2 className="text-sm font-bold">Rename chat</h2>
+            <input
+              autoFocus
+              value={renameTitle}
+              maxLength={80}
+              onChange={(event) => setRenameTitle(event.target.value)}
+              className="mt-4 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+              aria-label="Chat title"
+            />
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setChatToRename(null)}
+                className="flex-1 rounded-xl border border-border py-2.5 text-sm font-semibold transition hover:bg-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!renameTitle.trim()}
+                className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Rename
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
