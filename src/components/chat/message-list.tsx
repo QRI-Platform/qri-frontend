@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, Library, Brain, Wrench, ChevronDown, CheckCircle2, Loader2 } from "lucide-react";
+import { Sparkles, Library, Brain, Wrench, ChevronDown, CheckCircle2, Loader2, FileText } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import remarkGfm from "remark-gfm";
@@ -22,7 +22,7 @@ export interface ReasoningTimelineEvent {
 
 export interface Message {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   content: string;
   badge?: string;
   toolCalls?: ToolTimelineEvent[];
@@ -210,6 +210,13 @@ export function MessageList({ messages, thinking }: MessageListProps) {
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className="max-w-[80%]">
+              {m.role === "system" ? (
+                <div className="flex items-center gap-3 rounded-xl border border-border bg-secondary/60 px-3.5 py-2.5 text-sm text-muted-foreground">
+                  <FileText className="h-4 w-4 shrink-0 text-[var(--brand-blue)]" />
+                  <span>{m.content.replace(/^user uploaded document:\s*/i, "Uploaded file: ")}</span>
+                </div>
+              ) : (
+              <>
               {m.role === "assistant" && m.badge && (
                 <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-[var(--brand-teal)]/10 px-2.5 py-1 text-[11px] font-semibold text-[var(--brand-teal)]">
                   <Library className="h-3 w-3" />
@@ -251,6 +258,8 @@ export function MessageList({ messages, thinking }: MessageListProps) {
                     </div>
                   )}
                 </div>
+              )}
+              </>
               )}
             </div>
           </div>

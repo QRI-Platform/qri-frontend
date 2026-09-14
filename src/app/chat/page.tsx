@@ -19,10 +19,17 @@ interface BackendMessage {
   source: "LIBRARY" | "AI" | null;
 }
 
+interface UploadedFileMessage {
+  id: string;
+  role: "SYSTEM";
+  content: string;
+  source: null;
+}
+
 function toFrontendMessage(m: BackendMessage): Message {
   return {
     id: m.id,
-    role: m.role === "USER" ? "user" : "assistant",
+    role: m.role === "USER" ? "user" : m.role === "SYSTEM" ? "system" : "assistant",
     content: m.content,
     badge:
       m.role === "ASSISTANT"
@@ -191,15 +198,25 @@ export default function ChatPage() {
     const form = new FormData();
     form.append("files", toUpload, toUpload.name);
 
-    const result = await apiUpload(`/api/chats/${activeChatId}/upload`, form);
+    const result = await apiUpload<{
+      files: { name: string; size: number }[];
+      messages: UploadedFileMessage[];
+    }>(`/api/chats/${activeChatId}/upload`, form);
+
+    if (result.ok) {
+      handleMessagesAppended(result.data.messages.map(toFrontendMessage));
+      setAttachedFiles((prev) => prev.filter((f) => f.id !== file.id));
+      setPreviewFile((current) => (current?.id === file.id ? null : current));
+      return;
+    }
 
     setAttachedFiles((prev) =>
       prev.map((f) =>
         f.id === file.id
           ? {
               ...f,
-              status: result.ok ? "ready" : "failed",
-              error: result.ok ? undefined : result.error.message,
+              status: "failed",
+              error: result.error.message,
             }
           : f,
       ),
