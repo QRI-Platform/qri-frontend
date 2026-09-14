@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { AppHeader } from "@/components/app/app-header";
 import { ChatSidebar, type ChatSession } from "@/components/chat/chat-sidebar";
@@ -24,6 +24,11 @@ interface UploadedFileMessage {
   role: "SYSTEM";
   content: string;
   source: null;
+}
+
+interface UploadResponse {
+  files: { name: string; size: number }[];
+  messages: UploadedFileMessage[];
 }
 
 function toFrontendMessage(m: BackendMessage): Message {
@@ -58,6 +63,7 @@ export default function ChatPage() {
   const [chatToDelete, setChatToDelete] = useState<ChatSession | null>(null);
   const [chatToRename, setChatToRename] = useState<ChatSession | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
+  const pendingUploads = useRef(new Map<string, File>());
 
   useEffect(() => {
     if (!ready) return;
@@ -93,6 +99,7 @@ export default function ChatPage() {
   async function selectChat(id: string) {
     setActiveChatId(id);
     setAttachedFiles([]);
+    pendingUploads.current.clear();
     setPreviewFile(null);
     setSidebarOpen(false);
 
@@ -185,42 +192,51 @@ export default function ChatPage() {
   }
 
       async function handleFileSelected(file: SelectedFile, rawFile: File) {
-    setAttachedFiles((prev) => [...prev, file]);
+      setAttachedFiles((prev) => [...prev, { ...file, status: "pending" }]);
+      pendingUploads.current.set(file.id, rawFile);
     setPreviewFile(file);
     setPreviewKey((k) => k + 1);
+  }
 
-    if (!activeChatId) return;
+  async function uploadPendingFiles(): Promise<boolean> {
+    if (!activeChatId || pendingUploads.current.size === 0) return true;
 
-    // Shrink photos before sending - OCR cost scales with pixel count,
-    // and a full-resolution phone photo takes minutes on CPU.
-    const toUpload = await resizeImage(rawFile);
-
-    const form = new FormData();
-    form.append("files", toUpload, toUpload.name);
-
-    const result = await apiUpload<{
-      files: { name: string; size: number }[];
-      messages: UploadedFileMessage[];
-    }>(`/api/chats/${activeChatId}/upload`, form);
-
-    if (result.ok) {
-      handleMessagesAppended(result.data.messages.map(toFrontendMessage));
-      setAttachedFiles((prev) => prev.filter((f) => f.id !== file.id));
-      setPreviewFile((current) => (current?.id === file.id ? null : current));
-      return;
-    }
+    const pendingEntries = Array.from(pendingUploads.current.entries());
+    const pendingIds = new Set(pendingEntries.map(([fileId]) => fileId));
 
     setAttachedFiles((prev) =>
-      prev.map((f) =>
-        f.id === file.id
-          ? {
-              ...f,
-              status: "failed",
-              error: result.error.message,
-            }
-          : f,
-      ),
+      prev.map((file) => (pendingIds.has(file.id) ? { ...file, status: "uploading" } : file)),
     );
+
+    try {
+      const resizedFiles = await Promise.all(
+        pendingEntries.map(([, rawFile]) => resizeImage(rawFile)),
+      );
+      const form = new FormData();
+      resizedFiles.forEach((file) => form.append("files", file, file.name));
+
+      const result = await apiUpload<UploadResponse>(`/api/chats/${activeChatId}/upload`, form);
+      if (!result.ok) {
+        setAttachedFiles((prev) =>
+          prev.map((file) =>
+            pendingIds.has(file.id) ? { ...file, status: "failed", error: result.error.message } : file,
+          ),
+        );
+        return false;
+      }
+
+      pendingUploads.current.clear();
+      setAttachedFiles((prev) => prev.filter((file) => !pendingIds.has(file.id)));
+      setPreviewFile(null);
+      handleMessagesAppended(result.data.messages.map(toFrontendMessage));
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not read these files";
+      setAttachedFiles((prev) =>
+        prev.map((file) => (pendingIds.has(file.id) ? { ...file, status: "failed", error: message } : file)),
+      );
+      return false;
+    }
   }
 
   function handleOpenPreview(file: SelectedFile) {
@@ -229,6 +245,7 @@ export default function ChatPage() {
   }
 
   function handleRemoveAttachment(file: SelectedFile) {
+    pendingUploads.current.delete(file.id);
     setAttachedFiles((prev) => prev.filter((f) => f.id !== file.id));
     setPreviewFile((current) => (current?.id === file.id ? null : current));
   }
@@ -281,6 +298,7 @@ export default function ChatPage() {
             if (!activeChatId) return;
             setChats((prev) => prev.map((chat) => (chat.id === activeChatId ? { ...chat, title } : chat)));
           }}
+          onUploadFiles={uploadPendingFiles}
         />
 
                 <AnimatePresence>
