@@ -7,10 +7,13 @@ import { AppHeader } from "@/components/app/app-header";
 import { useRequireAuth } from "@/lib/use-require-auth";
 import { apiFetch } from "@/lib/api";
 
-interface PlanInfo {
-  status: string;
-  name: string | null;
-  questionLimit: number | null;
+interface Plan {
+  code: string;
+  name: string;
+  amountPaise: number;
+  questionLimit: number;
+  durationDays: number;
+  recommended: boolean;
 }
 
 interface SubscribeResponse {
@@ -20,30 +23,30 @@ interface SubscribeResponse {
   amountPaise: number;
 }
 
-/**
- * Razorpay's checkout is loaded from their CDN and attaches itself to
- * window. TypeScript doesn't know about it, so it's declared here.
- */
 declare global {
   interface Window {
     Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
   }
 }
 
-const FEATURES = [
-  "150 questions every month",
+const SHARED_FEATURES = [
   "Answers matched to your class and exam",
   "Ask by typing, photo, PDF, document or voice",
-  "Your conversations saved and searchable",
+  "Conversations saved and searchable",
 ];
+
+function rupees(paise: number) {
+  return `₹${Math.round(paise / 100)}`;
+}
 
 export default function UpgradePage() {
   const ready = useRequireAuth();
   const router = useRouter();
 
-  const [plan, setPlan] = useState<PlanInfo | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
-  const [subscribing, setSubscribing] = useState(false);
+  /** The plan currently being paid for, so only its button shows a spinner. */
+  const [subscribingTo, setSubscribingTo] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -52,7 +55,7 @@ export default function UpgradePage() {
     /**
      * Loaded on mount rather than on click. It comes from Razorpay's CDN
      * and can take a second or two - doing it lazily would make the
-     * student wait after pressing the button, which feels broken.
+     * student wait after pressing the button, which reads as broken.
      */
     if (!document.getElementById("razorpay-checkout")) {
       const script = document.createElement("script");
@@ -62,39 +65,51 @@ export default function UpgradePage() {
       document.body.appendChild(script);
     }
 
-    void loadPlan();
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
-  async function loadPlan() {
-    const result = await apiFetch<{ plan: PlanInfo }>("/api/users/me");
-    setLoading(false);
-    if (!result.ok) return;
+  async function load() {
+    const me = await apiFetch<{ plan: { status: string } }>("/api/users/me");
 
     // Already paid, or an admin - nothing to buy here.
-    if (result.data.plan.status === "ACTIVE" || result.data.plan.status === "EXEMPT") {
+    if (me.ok && (me.data.plan.status === "ACTIVE" || me.data.plan.status === "EXEMPT")) {
       router.replace("/chat");
       return;
     }
-    setPlan(result.data.plan);
+
+    /**
+     * Plans come from the server rather than being hardcoded here, so
+     * adding or repricing one means changing a single file on the
+     * backend - not this page too.
+     */
+    const result = await apiFetch<{ plans: Plan[] }>("/api/payments/plans");
+    setLoading(false);
+
+    if (!result.ok) {
+      setError(result.error.message);
+      return;
+    }
+    setPlans(result.data.plans);
   }
 
-  async function handleSubscribe() {
+  async function handleSubscribe(plan: Plan) {
     setError("");
-    setSubscribing(true);
+    setSubscribingTo(plan.code);
 
     const result = await apiFetch<SubscribeResponse>("/api/payments/subscribe", {
       method: "POST",
+      body: JSON.stringify({ planCode: plan.code }),
     });
 
     if (!result.ok) {
-      setSubscribing(false);
+      setSubscribingTo(null);
       setError(result.error.message);
       return;
     }
 
     if (!window.Razorpay) {
-      setSubscribing(false);
+      setSubscribingTo(null);
       setError("Payment window couldn't load. Please refresh and try again.");
       return;
     }
@@ -106,20 +121,15 @@ export default function UpgradePage() {
       description: `${result.data.planName} plan`,
       theme: { color: "#1D7EF2" },
       /**
-       * Called when Razorpay's window reports success. Note this does
-       * NOT activate the plan - only the signature-verified webhook
-       * does that. This just moves the student along and re-checks.
-       *
-       * The webhook can arrive a moment later than this callback, so
-       * the chat page may briefly still see no plan. That's why it
-       * re-reads rather than assuming.
+       * Called when Razorpay's window reports success. This does NOT
+       * activate the plan - only the signature-verified webhook does.
+       * It just moves the student along; /chat re-checks, since the
+       * webhook can land a moment after this callback.
        */
-      handler: () => {
-        router.replace("/chat");
-      },
+      handler: () => router.replace("/chat"),
       modal: {
         // Student closed the window without paying.
-        ondismiss: () => setSubscribing(false),
+        ondismiss: () => setSubscribingTo(null),
       },
     });
 
@@ -132,58 +142,89 @@ export default function UpgradePage() {
     <div className="flex min-h-screen flex-col">
       <AppHeader />
 
-      <main className="flex flex-1 items-center justify-center bg-background px-6 py-12">
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        ) : (
-          <div className="w-full max-w-md">
-            <div className="text-center">
-              <span className="inline-flex rounded-full bg-[var(--brand-teal)]/10 px-3 py-1 text-xs font-semibold text-[var(--brand-teal)]">
-                Early Bird
-              </span>
-              <h1 className="mt-4 text-2xl font-bold tracking-tight">
-                Start learning with QRI
-              </h1>
-              <p className="mt-1.5 text-sm text-muted-foreground">
-                One simple plan. Cancel whenever you like.
-              </p>
-            </div>
-
-            <div className="mt-8 rounded-2xl border border-border bg-card p-6">
-              <div className="flex items-baseline gap-1">
-                <span className="text-4xl font-bold">₹9</span>
-                <span className="text-sm text-muted-foreground">/ month</span>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Renews automatically. Cancel any time.
-              </p>
-
-              <ul className="mt-6 space-y-3">
-                {FEATURES.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2.5 text-sm">
-                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-[var(--brand-teal)]" />
-                    <span>{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              {error && <p className="mt-5 text-sm text-destructive">{error}</p>}
-
-              <button
-                onClick={handleSubscribe}
-                disabled={subscribing}
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--brand-blue)] py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
-              >
-                {subscribing && <Loader2 className="h-4 w-4 animate-spin" />}
-                {subscribing ? "Opening payment..." : "Subscribe for ₹9/month"}
-              </button>
-
-              <p className="mt-3 text-center text-xs text-muted-foreground">
-                Pay with UPI, card or wallet. Secured by Razorpay.
-              </p>
-            </div>
+      <main className="flex-1 bg-background px-6 py-12">
+        <div className="mx-auto max-w-6xl">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              Choose your plan
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Cancel any time. You keep access until the period you&apos;ve paid for ends.
+            </p>
           </div>
-        )}
+
+          {error && <p className="mt-6 text-center text-sm text-destructive">{error}</p>}
+
+          {loading ? (
+            <p className="mt-10 text-center text-sm text-muted-foreground">Loading plans...</p>
+          ) : (
+            <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+              {plans.map((plan) => {
+                const isBusy = subscribingTo === plan.code;
+                const anyBusy = subscribingTo !== null;
+
+                return (
+                  <div
+                    key={plan.code}
+                    className={`relative flex flex-col rounded-2xl border bg-card p-6 ${
+                      plan.recommended
+                        ? "border-[var(--brand-blue)] shadow-lg shadow-blue-500/10"
+                        : "border-border"
+                    }`}
+                  >
+                    {plan.recommended && (
+                      <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--brand-blue)] px-3 py-1 text-[11px] font-semibold text-white">
+                        Most popular
+                      </span>
+                    )}
+
+                    <p className="text-sm font-semibold">{plan.name}</p>
+
+                    <div className="mt-3 flex items-baseline gap-1">
+                      <span className="text-3xl font-bold">{rupees(plan.amountPaise)}</span>
+                      <span className="text-xs text-muted-foreground">/ month</span>
+                    </div>
+
+                    <p className="mt-3 text-sm font-medium text-[var(--brand-teal)]">
+                      {plan.questionLimit.toLocaleString("en-IN")} questions a month
+                    </p>
+
+                    <ul className="mt-5 flex-1 space-y-2.5">
+                      {SHARED_FEATURES.map((feature) => (
+                        <li key={feature} className="flex items-start gap-2 text-xs">
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--brand-teal)]" />
+                          <span className="text-muted-foreground">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <button
+                      onClick={() => handleSubscribe(plan)}
+                      /**
+                       * Every button disables while any payment is in
+                       * progress. Two checkouts open at once would
+                       * create two subscriptions.
+                       */
+                      disabled={anyBusy}
+                      className={`mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition disabled:opacity-60 ${
+                        plan.recommended
+                          ? "bg-[var(--brand-blue)] text-white hover:opacity-90"
+                          : "border border-border hover:bg-secondary"
+                      }`}
+                    >
+                      {isBusy && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {isBusy ? "Opening..." : "Choose plan"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <p className="mt-8 text-center text-xs text-muted-foreground">
+            Pay with UPI, card or wallet. Secured by Razorpay.
+          </p>
+        </div>
       </main>
     </div>
   );
