@@ -62,12 +62,9 @@ export default function SignupPage() {
     }
 
     saveToken(result.data.token);
-    /**
-     * Straight to the plan page. A new student has no subscription, so
-     * /chat would only bounce them here anyway - going directly avoids
-     * a visible flash of the wrong page.
-     */
-    router.push("/upgrade");
+
+    router.push("/chat");
+  
   }
 
   return (
