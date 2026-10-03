@@ -10,9 +10,9 @@ interface FaqItem {
 }
 
 const FAQS: FaqItem[] = [
-  {
+    {
     q: "How much does QRI cost?",
-    a: "QRI is ₹9 a month under the current Early Bird offer, which includes 150 questions a month. You can cancel any time, and you keep access until the end of the period you've paid for.",
+    a: "You can start free - just sign up and begin asking questions, no card needed. When your free questions run out, paid plans start at ₹99 a month. You can cancel any time and keep access until the end of the period you've paid for.",
   },
   {
     q: "Which classes and subjects are covered?",
@@ -26,9 +26,9 @@ const FAQS: FaqItem[] = [
     q: "Is my data safe?",
     a: "Yes. Your personal data and chat history are private to your account and are not visible to other students.",
   },
-  {
+    {
     q: "Does asking by photo, PDF, or voice cost extra?",
-    a: "No - typing, photo, voice, document, and PDF are all included in the same plan.",
+    a: "No - typing, photo, voice, document, and PDF all work the same way and are included in every plan, including the free trial.",
   },
   {
     q: "Is NEET/IIT-JEE/NDA prep different from regular Class 11-12 content?",

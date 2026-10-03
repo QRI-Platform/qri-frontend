@@ -155,15 +155,20 @@ export type StreamEvent =
  * Separate from apiFetch because that calls .json(), which waits for
  * the whole body - exactly what we're trying to avoid here.
  *
- * Returns an error string if the request itself failed. Once the stream
- * has started, failures arrive as events instead, since the status code
- * has already been sent and can't be changed.
+ * Returns the error code and message if the request failed before
+ * streaming began. The code matters: a trial running out and a paid
+ * plan running out are both 403, but one leads to the pricing page and
+ * the other to a reset date. Matching on message text would be
+ * guesswork.
+ *
+ * Once the stream has started, failures arrive as events instead,
+ * since the status code has already been sent and can't be changed.
  */
 export async function apiStream(
   path: string,
   body: unknown,
   onEvent: (event: StreamEvent) => void,
-): Promise<string | null> {
+): Promise<{ code: string; message: string } | null> {
   const token = getToken();
 
   try {
@@ -189,10 +194,14 @@ export async function apiStream(
         }
       }
 
-      return failed.ok ? "Something went wrong" : failed.error.message;
+      return failed.ok
+        ? { code: "UNKNOWN", message: "Something went wrong" }
+        : { code: failed.error.code, message: failed.error.message };
     }
 
-    if (!res.body) return "The server sent no response";
+    if (!res.body) {
+      return { code: "NO_BODY", message: "The server sent no response" };
+    }
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -226,6 +235,9 @@ export async function apiStream(
 
     return null;
   } catch (err) {
-    return err instanceof Error ? err.message : "Could not reach the server";
+    return {
+      code: "NETWORK_ERROR",
+      message: err instanceof Error ? err.message : "Could not reach the server",
+    };
   }
 }

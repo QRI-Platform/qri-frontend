@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent } from "react";
+import Link from "next/link";
+import { Sparkles } from "lucide-react";
 import {
   Menu,
   Camera,
@@ -80,6 +82,12 @@ export function ChatThread({
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
   const [sendError, setSendError] = useState("");
+    /**
+   * Set when the student has run out of questions. Replaces the input
+   * box with an upgrade prompt rather than showing an error they can't
+   * act on.
+   */
+  const [limitReached, setLimitReached] = useState<"trial" | "plan" | null>(null);
 
   const { isListening, error: voiceError, startListening, stopListening } = useSpeechInput();
 
@@ -251,10 +259,25 @@ export function ChatThread({
 
     setThinking(false);
 
-    if (failure) {
+        if (failure) {
+      /**
+       * Running out of questions isn't an error to dismiss - it needs
+       * a route forward. A trial ending shows the plans; a paid plan
+       * running out points at the reset date instead.
+       */
+      if (failure.code === "TRIAL_ENDED") {
+        setLimitReached("trial");
+        return;
+      }
+      if (failure.code === "QUESTION_LIMIT_REACHED" || failure.code === "NO_ACTIVE_PLAN") {
+        setLimitReached("plan");
+        setSendError(failure.message);
+        return;
+      }
+
       // Only reachable if it failed before streaming began - otherwise
       // the error arrived as an event.
-      if (!started) setSendError(failure);
+      if (!started) setSendError(failure.message);
       return;
     }
   }
@@ -331,134 +354,169 @@ export function ChatThread({
 
       <MessageList messages={messages} thinking={thinking} />
 
-      <div className="border-t border-border p-4">
+            <div className="border-t border-border p-4">
         <div className="mx-auto max-w-3xl">
-          {attachedFiles.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-2">
-              {attachedFiles.map((file) => (
-                <button
-                  key={file.id}
-                  onClick={() => onOpenPreview(file)}
-                  className="flex w-fit items-center gap-2 rounded-lg border border-border bg-secondary px-3 py-1.5 text-xs font-medium transition hover:bg-secondary/70"
+          {limitReached ? (
+            /**
+             * Replaces the input entirely rather than sitting above it.
+             * Leaving a working text box next to "you've run out" lets
+             * a student type a question that can't be sent.
+             */
+            <div className="rounded-2xl border-2 border-[var(--brand-blue)] bg-[var(--brand-blue)]/5 p-5 text-center">
+              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[var(--brand-blue)]">
+                <Sparkles className="h-5 w-5 text-white" />
+              </div>
+
+              <p className="mt-3 font-bold">
+                {limitReached === "trial"
+                  ? "You've used all your free questions"
+                  : "You've used all your questions"}
+              </p>
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                {limitReached === "trial"
+                  ? "Choose a plan to keep asking - your conversations stay exactly where they are."
+                  : sendError}
+              </p>
+
+              {limitReached === "trial" && (
+                <Link
+                  href="/upgrade"
+                  className="mt-4 inline-block rounded-xl bg-[var(--brand-blue)] px-6 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
                 >
-                  {file.type === "image" ? (
-                    <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                  ) : (
-                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                  )}
-                  <span className="max-w-[160px] truncate">{file.name}</span>
-                  {file.status === "uploading" && (
-                    <span className="text-[var(--brand-blue)]">Reading...</span>
-                  )}
-                  {file.status === "failed" && (
-                    <span className="text-destructive">Couldn&apos;t read</span>
-                  )}
-                  <span
-                    role="button"
-                    aria-label="Remove attachment"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveAttachment(file);
-                    }}
-                    className="ml-1 rounded-full p-0.5 hover:bg-border"
-                  >
-                    <X className="h-3 w-3" />
-                  </span>
-                </button>
-              ))}
+                  See plans
+                </Link>
+              )}
             </div>
+          ) : (
+            <>
+              {attachedFiles.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {attachedFiles.map((file) => (
+                    <button
+                      key={file.id}
+                      onClick={() => onOpenPreview(file)}
+                      className="flex w-fit items-center gap-2 rounded-lg border border-border bg-secondary px-3 py-1.5 text-xs font-medium transition hover:bg-secondary/70"
+                    >
+                      {file.type === "image" ? (
+                        <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                      ) : (
+                        <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                      )}
+                      <span className="max-w-[160px] truncate">{file.name}</span>
+                      {file.status === "uploading" && (
+                        <span className="text-[var(--brand-blue)]">Reading...</span>
+                      )}
+                      {file.status === "failed" && (
+                        <span className="text-destructive">Couldn&apos;t read</span>
+                      )}
+                      <span
+                        role="button"
+                        aria-label="Remove attachment"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveAttachment(file);
+                        }}
+                        className="ml-1 rounded-full p-0.5 hover:bg-border"
+                      >
+                        <X className="h-3 w-3" />
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {sendError && <p className="mb-2 text-xs text-destructive">{sendError}</p>}
+              {voiceError && <p className="mb-2 text-xs text-destructive">{voiceError}</p>}
+              {isUploading && (
+                <p className="mb-2 text-xs text-muted-foreground">
+                  Reading your file - photos can take a minute or two.
+                </p>
+              )}
+              {failedFiles.map((f) => (
+                <p key={f.id} className="mb-2 text-xs text-destructive">
+                  {f.name}: {f.error}
+                </p>
+              ))}
+              {isListening && (
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[var(--brand-blue)]">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--brand-blue)] opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--brand-blue)]" />
+                  </span>
+                  Listening...
+                </p>
+              )}
+
+              <div className="flex items-end gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm">
+                <button
+                  onClick={() => imageInputRef.current?.click()}
+                  aria-label="Upload a photo"
+                  className="shrink-0 rounded-xl p-2.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                >
+                  <Camera className="h-5 w-5" />
+                </button>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleImagePick}
+                />
+
+                <button
+                  onClick={() => docInputRef.current?.click()}
+                  aria-label="Upload a document or PDF"
+                  className="shrink-0 rounded-xl p-2.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
+                >
+                  <Paperclip className="h-5 w-5" />
+                </button>
+                <input
+                  ref={docInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt"
+                  multiple
+                  className="hidden"
+                  onChange={handleDocPick}
+                />
+
+                <button
+                  onClick={handleMicClick}
+                  aria-label={isListening ? "Stop listening" : "Ask by voice"}
+                  className={`shrink-0 rounded-xl p-2.5 transition ${
+                    isListening
+                      ? "bg-[var(--brand-blue)]/10 text-[var(--brand-blue)]"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  }`}
+                >
+                  <Mic className="h-5 w-5" />
+                </button>
+
+                <textarea
+                  rows={1}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  placeholder="Ask anything..."
+                  className="max-h-32 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
+                />
+
+                <button
+                  onClick={handleSend}
+                  disabled={!input.trim() || !chatId || isUploading}
+                  aria-label="Send"
+                  className="shrink-0 rounded-xl bg-[var(--brand-blue)] p-2.5 text-white transition hover:opacity-90 disabled:opacity-40"
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </button>
+              </div>
+            </>
           )}
-
-          {sendError && <p className="mb-2 text-xs text-destructive">{sendError}</p>}
-          {voiceError && <p className="mb-2 text-xs text-destructive">{voiceError}</p>}
-          {isUploading && (
-            <p className="mb-2 text-xs text-muted-foreground">
-              Reading your file - photos can take a minute or two.
-            </p>
-          )}
-          {failedFiles.map((f) => (
-            <p key={f.id} className="mb-2 text-xs text-destructive">
-              {f.name}: {f.error}
-            </p>
-          ))}
-          {isListening && (
-            <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[var(--brand-blue)]">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--brand-blue)] opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--brand-blue)]" />
-              </span>
-              Listening...
-            </p>
-          )}
-
-          <div className="flex items-end gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm">
-            <button
-              onClick={() => imageInputRef.current?.click()}
-              aria-label="Upload a photo"
-              className="shrink-0 rounded-xl p-2.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-            >
-              <Camera className="h-5 w-5" />
-            </button>
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={handleImagePick}
-            />
-
-            <button
-              onClick={() => docInputRef.current?.click()}
-              aria-label="Upload a document or PDF"
-              className="shrink-0 rounded-xl p-2.5 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-            >
-              <Paperclip className="h-5 w-5" />
-            </button>
-            <input
-              ref={docInputRef}
-              type="file"
-              accept=".pdf,.doc,.docx,.txt"
-              multiple
-              className="hidden"
-              onChange={handleDocPick}
-            />
-
-            <button
-              onClick={handleMicClick}
-              aria-label={isListening ? "Stop listening" : "Ask by voice"}
-              className={`shrink-0 rounded-xl p-2.5 transition ${
-                isListening
-                  ? "bg-[var(--brand-blue)]/10 text-[var(--brand-blue)]"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              }`}
-            >
-              <Mic className="h-5 w-5" />
-            </button>
-
-            <textarea
-              rows={1}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder="Ask anything..."
-              className="max-h-32 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground"
-            />
-
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || !chatId || isUploading}
-              aria-label="Send"
-              className="shrink-0 rounded-xl bg-[var(--brand-blue)] p-2.5 text-white transition hover:opacity-90 disabled:opacity-40"
-            >
-              <ArrowUp className="h-4 w-4" />
-            </button>
-          </div>
         </div>
       </div>
     </div>

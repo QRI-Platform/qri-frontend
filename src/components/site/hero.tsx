@@ -11,13 +11,8 @@ export function Hero() {
 
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 py-16 md:grid-cols-2 md:py-24">
         <div className="max-w-xl">
-          {/**
-           * The price sits in the badge rather than the button. It's the
-           * first thing read, and keeps the button short enough not to
-           * wrap on a phone.
-           */}
           <span className="inline-flex items-center gap-2 rounded-full border border-[var(--brand-teal)]/30 bg-[var(--brand-teal)]/10 px-3 py-1 text-xs font-semibold text-[var(--brand-teal)]">
-            Early Bird Offer - just ₹9/month
+            Free trial - no card needed
           </span>
 
           <h1 className="mt-5 text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">
@@ -36,7 +31,7 @@ export function Hero() {
               href="/signup"
               className="inline-flex items-center justify-center rounded-xl bg-[var(--brand-blue)] px-6 py-3 font-semibold text-white shadow-lg shadow-blue-500/20 transition hover:opacity-90"
             >
-              Start for ₹9/month
+              Start learning free
             </a>
             <a
               href="#how-it-works"
@@ -47,7 +42,7 @@ export function Hero() {
           </div>
 
           <p className="mt-5 text-xs text-muted-foreground">
-            150 questions a month - Class 6-12 - NEET - IIT-JEE - NDA
+            Class 6-12 - NEET - IIT-JEE - NDA
           </p>
         </div>
 
