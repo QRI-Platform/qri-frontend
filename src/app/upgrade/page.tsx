@@ -69,13 +69,24 @@ export default function UpgradePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
-  async function load() {
-    const me = await apiFetch<{ plan: { status: string } }>("/api/users/me");
+   async function load() {
+    const me = await apiFetch<{ plan: { status: string; isTrial?: boolean } }>("/api/users/me");
 
-    // Already paid, or an admin - nothing to buy here.
-    if (me.ok && (me.data.plan.status === "ACTIVE" || me.data.plan.status === "EXEMPT")) {
-      router.replace("/chat");
-      return;
+    /**
+     * A trial counts as ACTIVE, but upgrading from one is exactly why
+     * a student lands here - so only a real subscription or an admin
+     * gets sent away. Checking status alone would bounce every trial
+     * user straight back to chat, which is the one thing this page
+     * exists to let them escape.
+     */
+    if (me.ok) {
+      const onPaidPlan = me.data.plan.status === "ACTIVE" && !me.data.plan.isTrial;
+      const isAdmin = me.data.plan.status === "EXEMPT";
+
+      if (onPaidPlan || isAdmin) {
+        router.replace("/chat");
+        return;
+      }
     }
 
     /**
@@ -146,7 +157,7 @@ export default function UpgradePage() {
         <div className="mx-auto max-w-6xl">
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Choose your plan
+              Keep going with QRI
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Cancel any time. You keep access until the period you&apos;ve paid for ends.
@@ -158,8 +169,7 @@ export default function UpgradePage() {
           {loading ? (
             <p className="mt-10 text-center text-sm text-muted-foreground">Loading plans...</p>
           ) : (
-            <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-              {plans.map((plan) => {
+              <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3 lg:mx-auto lg:max-w-4xl">                {plans.map((plan) => {
                 const isBusy = subscribingTo === plan.code;
                 const anyBusy = subscribingTo !== null;
 

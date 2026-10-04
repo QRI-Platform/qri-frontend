@@ -44,8 +44,9 @@ interface PlanInfo {
   status: string;
   name: string | null;
   price: string | null;
+  isTrial : boolean;
   expiresAt: string | null;
-  questionsUsed: number;
+  questionsUsed: number| null;
   questionLimit: number | null;
   resetsAt: string | null;
 }
@@ -174,6 +175,7 @@ export default function ProfilePage() {
 
   const isAdmin = original?.role === "ADMIN";
   const used = plan?.questionsUsed ?? 0;
+  const isTrial = plan?.isTrial === true;
   const limit = plan?.questionLimit ?? null;
   const remaining = limit !== null ? Math.max(0, limit - used) : null;
   const percentUsed = limit !== null && limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
@@ -231,6 +233,20 @@ export default function ProfilePage() {
                   <p className="mt-3 text-sm text-muted-foreground">
                     Admin accounts have unlimited questions.
                   </p>
+                ) : isTrial ? (
+                  <div className="mt-3">
+                    <p className="text-sm text-muted-foreground">
+                      You are on the free trial. Upgrade any time for more questions and
+                      everything else QRI can do.
+                    </p>
+                    <Link
+                      href="/upgrade"
+                      className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[var(--brand-blue)] px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      See plans
+                    </Link>
+                  </div>
                 ) : plan && limit !== null ? (
                   <div className="mt-5">
                     <div className="flex items-baseline justify-between text-sm">
